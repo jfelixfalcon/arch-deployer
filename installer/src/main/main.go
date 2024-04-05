@@ -4,20 +4,18 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 
-	"github.com/schollz/progressbar/v3"
+	"gopkg.in/yaml.v3"
 )
 
 var (
-	drive    = flag.String("d", "", "The drive to partition. Example: nvme0n0")
-	hostname = flag.String("c", "", "The computer host name. Example: arch-master")
-	bootPart = flag.String("b", "", "The boot partition. Example: p2")
-	uname    = flag.String("u", "", "The username to create. Example: admin")
-	bar      = progressbar.Default(570)
+	configFile = flag.String("f", "", "Server configuration file")
 )
 
 func cmdExec(args string) error {
@@ -35,7 +33,6 @@ func cmdExec(args string) error {
 		return err
 	}
 
-	bar.Add(10)
 	return nil
 }
 
@@ -59,11 +56,11 @@ func cmdExecFile(args string, filename string, perms fs.FileMode) error {
 		return err
 	}
 
-	bar.Add(10)
 	return nil
 }
 
-func configure() error {
+func configure(config serverConfig) error {
+
 	// Setting Locale
 	err := cmdExec("sed -i 's/#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen")
 	if err != nil {
@@ -92,14 +89,14 @@ func configure() error {
 	}
 
 	// Setting Hostname
-	err = cmdExecFile("echo "+*hostname, "/etc/hostname", 0755)
+	err = cmdExecFile("echo "+config.hostname, "/etc/hostname", 0755)
 	if err != nil {
 		return err
 	}
 
 	// Setting Hosts
 	err = cmdExecFile(
-		"printf  '127.0.0.1   localhost\n::1   localhost\n127.0.1.1   "+*hostname+"'",
+		"printf  '127.0.0.1   localhost\n::1   localhost\n127.0.1.1   "+config.hostname+"'",
 		"/etc/hosts",
 		0755,
 	)
@@ -108,7 +105,7 @@ func configure() error {
 	}
 
 	// Creating User
-	err = cmdExec("useradd -m -s /usr/bin/zsh -G wheel " + *uname + " -p '$y$j9T$jOPk2UThDe2fZxuc5jOnV1$CEp3s0fbtRNeVzmMJcoYF8ydCHI7Tzjw/pev//gkwOC'")
+	err = cmdExec("useradd -m -s /usr/bin/zsh -G wheel " + config.username + " -p '$y$j9T$jOPk2UThDe2fZxuc5jOnV1$CEp3s0fbtRNeVzmMJcoYF8ydCHI7Tzjw/pev//gkwOC'")
 	if err != nil {
 		return err
 	}
@@ -124,7 +121,7 @@ func configure() error {
 		return err
 	}
 
-	err = cmdExec("mount /dev/" + *drive + *bootPart + " /boot/efi")
+	err = cmdExec("mount " + config.bootPartition + " /boot/efi")
 	if err != nil {
 		return err
 	}
@@ -139,39 +136,23 @@ func configure() error {
 		return err
 	}
 
-	// Installing Services
+	// Setting Services
 
-	// Setting Network
-	err = cmdExec("pacman -S networkmanager --noconfirm")
-	if err != nil {
-		return err
-	}
+	for _, service := range config.services {
+		log.Println("Installing ", service.name)
 
-	err = cmdExec("systemctl enable NetworkManager")
-	if err != nil {
-		return err
-	}
+		err = cmdExec("pacman -S " + service.name + " --noconfirm")
+		if err != nil {
+			return err
+		}
 
-	// Installing Openssh
-	err = cmdExec("pacman -S openssh --noconfirm")
-	if err != nil {
-		return err
-	}
+		log.Println("Enabling ", service.svc)
 
-	err = cmdExec("systemctl enable sshd")
-	if err != nil {
-		return err
-	}
+		err = cmdExec("systemctl enable " + service.svc)
+		if err != nil {
+			return err
+		}
 
-	// Install Firewalld
-	err = cmdExec("pacman -S firewalld --noconfirm")
-	if err != nil {
-		return err
-	}
-
-	err = cmdExec("systemctl enable firewalld")
-	if err != nil {
-		return err
 	}
 
 	// Installing arch-install-scripts (dep)
@@ -245,7 +226,7 @@ func configure() error {
 		return err
 	}
 
-	err = cmdExec("usermod -aG docker " + *uname)
+	err = cmdExec("usermod -aG docker " + config.username)
 	if err != nil {
 		return err
 	}
@@ -260,7 +241,7 @@ func configure() error {
 		return err
 	}
 
-	file, err := os.OpenFile("/home/"+*uname+"/.zshrc", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile("/home/"+config.username+"/.zshrc", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -284,7 +265,7 @@ func configure() error {
 		return err
 	}
 
-	err = cmdExec("chown " + *uname + ":" + *uname + " /home/predfalcn/.zshrc")
+	err = cmdExec("chown " + config.username + ":" + config.username + " /home/predfalcn/.zshrc")
 	if err != nil {
 		return err
 	}
@@ -292,8 +273,11 @@ func configure() error {
 	return nil
 }
 
+// Entry Point
 func main() {
-	logfile, err := os.OpenFile("installer_log", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+
+	// Setting logfile
+	logfile, err := os.OpenFile("/tmp/arch-installer.log", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		fmt.Println("Unable to set logfile:", err)
 		log.Fatalln("Unable to set logfile:", err)
@@ -301,23 +285,141 @@ func main() {
 
 	defer logfile.Close()
 
-	log.SetOutput(logfile)
+	// Sending output to both stdout and file
+	mw := io.MultiWriter(os.Stdout, logfile)
+
+	log.SetOutput(mw)
 
 	flag.Parse()
 
-	if *drive == "" || *hostname == "" || *uname == "" {
-		log.Println("Drive Uname, Name and Hostname arguments are mandatory!")
-		fmt.Println("Drive Uname, Name and Hostname arguments are mandatory!")
-		return
+	if len(*configFile) == 0 {
+		log.Fatalln("ConfigFile argument missing...")
 	}
 
-	flag.Parse()
+	config := validateConfig(*configFile)
 
-	err = configure()
+	err = configure(config)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
 	fmt.Println("Configuration Completed !!!")
+}
+
+func validateConfig(configFile string) serverConfig {
+
+	// structure to store configuration file
+	var config serverConfig
+
+	cfile, err := os.ReadFile(configFile)
+	if err != nil {
+		log.Fatalln(err, " ...")
+	}
+
+	yamlConfig := make(map[interface{}]interface{})
+
+	err = yaml.Unmarshal(cfile, &yamlConfig)
+	if err != nil {
+		log.Fatalln(err, "...")
+	}
+
+	if (yamlConfig["installer"]) == nil {
+		log.Fatalln("installer value not found in config file...")
+	}
+
+	installerConfig := yamlConfig["installer"].(map[string]interface{})
+
+	// validating mandatory configFile information
+
+	// validating drive name
+	tmp := installerConfig["driveName"]
+
+	if tmp == nil {
+		log.Fatalln("Configuration missing required parameter {driveName}")
+	}
+
+	// checking if drive exist
+
+	// _, err = diskfs.Open(tmp.(string))
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+
+	config.driveName = tmp.(string)
+
+	// validating username
+	tmp = installerConfig["username"]
+	if tmp == nil {
+		log.Fatalln("Configuration missing required parameter {username}")
+	}
+
+	if match, _ := regexp.MatchString("^[a-z_][a-z0-9_-]*[$]?", tmp.(string)); !match {
+		log.Fatalln("Invalid username: ", tmp.(string))
+	}
+
+	config.username = tmp.(string)
+
+	// validating hostname
+	tmp = installerConfig["hostname"]
+	if tmp == nil {
+		log.Fatalln("Configuration missin required parameter {hostname}...")
+	}
+
+	if match, _ := regexp.MatchString("^[a-z_][a-z0-9_-]*[$]?", tmp.(string)); !match {
+		log.Fatalln("Invalid hostname: ", tmp.(string))
+	}
+
+	config.hostname = tmp.(string)
+
+	// validating boot partition
+	tmp = installerConfig["bootPartition"]
+	if tmp == nil {
+		log.Fatalln("Configuration missin required parameter {bootPartition}...")
+	}
+
+	// checking if partition exist
+
+	// _, err = diskfs.Open(tmp.(string))
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+
+	config.bootPartition = tmp.(string)
+
+	// validating services
+	tmp = installerConfig["services"]
+	if tmp != nil {
+		for _, svc := range tmp.([]interface{}) {
+
+			st := svc.(map[string]interface{})
+
+			config.services = append(config.services, service{name: st["name"].(string), svc: st["service"].(string)})
+		}
+	}
+
+	// validating packages
+	tmp = installerConfig["packages"]
+	if tmp != nil {
+		for _, pkg := range tmp.([]interface{}) {
+			config.packets = append(config.packets, pkg.(string))
+
+		}
+	}
+
+	return config
+}
+
+type serverConfig struct {
+	hostname      string
+	username      string
+	driveName     string
+	bootPartition string
+	packets       []string
+	services      []service
+}
+
+type service struct {
+	name string
+	svc  string
 }
