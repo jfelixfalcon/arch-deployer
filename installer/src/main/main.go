@@ -105,15 +105,21 @@ func configure(config serverConfig) error {
 	}
 
 	// Creating User
-	err = cmdExec("useradd -m -s /usr/bin/zsh -G wheel " + config.username + " -p '$y$j9T$jOPk2UThDe2fZxuc5jOnV1$CEp3s0fbtRNeVzmMJcoYF8ydCHI7Tzjw/pev//gkwOC'")
+	err = cmdExec("useradd -m -s /usr/bin/zsh -G wheel " + config.username + " -p '" + config.password + "'")
 	if err != nil {
 		return err
 	}
 
-	// Setting Grub
-	err = cmdExec("pacman -S grub efibootmgr --noconfirm")
-	if err != nil {
-		return err
+	// Installing Additional Packages
+
+	for _, packet := range config.packages {
+		log.Println("Installing package: ", packet)
+		err = cmdExec("pacman -S " + packet + " --noconfirm")
+		if err != nil {
+			return err
+		}
+
+		log.Println(packet, " installed...")
 	}
 
 	err = cmdExec("mkdir /boot/efi")
@@ -139,27 +145,15 @@ func configure(config serverConfig) error {
 	// Setting Services
 
 	for _, service := range config.services {
-		log.Println("Installing ", service.name)
+		log.Println("Enabling ", service)
 
-		err = cmdExec("pacman -S " + service.name + " --noconfirm")
+		err = cmdExec("systemctl enable " + service)
 		if err != nil {
 			return err
 		}
 
-		log.Println("Enabling ", service.svc)
+		log.Println(service, " enabled...")
 
-		err = cmdExec("systemctl enable " + service.svc)
-		if err != nil {
-			return err
-		}
-
-	}
-
-	// Installing arch-install-scripts (dep)
-
-	err = cmdExec("pacman -S arch-install-scripts --noconfirm")
-	if err != nil {
-		return err
 	}
 
 	// Updating fstab
@@ -174,69 +168,7 @@ func configure(config serverConfig) error {
 		return err
 	}
 
-	// Installing Additional Tools
-
-	packets := []string{
-		"xorg",
-		"plasma",
-		"plasma-wayland-session",
-		"zsh",
-		"zsh-completions",
-		"zsh-lovers",
-		"zsh-history-substring-search",
-		"zsh-autosuggestions",
-		"zsh-syntax-highlighting",
-		"zsh-theme-powerlevel10k",
-		"nerd-fonts",
-		"git",
-		"npm",
-		"unzip",
-		"okular",
-		"docker",
-		"docker-compose",
-		"xclip",
-		"pipewire",
-		"firefox",
-		"sshfs",
-		"packagekit-qt5",
-		"opensc",
-		"pcsc-tools",
-		"go",
-		"base-devel",
-		"dolphin",
-		"neovim",
-		"konsole",
-	}
-
-	for _, packet := range packets {
-		err = cmdExec("pacman -S " + packet + " --noconfirm")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Enable additional services
-	err = cmdExec("systemctl enable docker")
-	if err != nil {
-		return err
-	}
-
-	err = cmdExec("systemctl enable pcscd")
-	if err != nil {
-		return err
-	}
-
 	err = cmdExec("usermod -aG docker " + config.username)
-	if err != nil {
-		return err
-	}
-
-	err = cmdExec("systemctl enable sddm.service")
-	if err != nil {
-		return err
-	}
-
-	err = cmdExec("systemctl enable bluetooth")
 	if err != nil {
 		return err
 	}
@@ -248,24 +180,19 @@ func configure(config serverConfig) error {
 
 	defer file.Close()
 
-	_, err = file.WriteString(
-		"HISTSIZE=1000\nSAVEHIST=1000\nbindkey -e\nzstyle :compinstall filename '/home/predfalcn/.zshrc'\nautoload -Uz compinit\ncompinit\n",
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.WriteString("source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme\n")
-	if err != nil {
-		return err
-	}
-
 	_, err = file.WriteString("alias ls='ls --color=auto'\n")
 	if err != nil {
 		return err
 	}
 
-	err = cmdExec("chown " + config.username + ":" + config.username + " /home/predfalcn/.zshrc")
+	file, err = os.OpenFile("/home/"+config.username+"/.histfile", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	err = cmdExec("chown -R " + config.username + ":" + config.username + " /home/" + config.username)
 	if err != nil {
 		return err
 	}
@@ -360,6 +287,14 @@ func validateConfig(configFile string) serverConfig {
 
 	config.username = tmp.(string)
 
+	// validating password
+	tmp = installerConfig["password"]
+	if tmp == nil {
+		log.Fatalln("Configuration missing required parameter {password}")
+	}
+
+	config.password = tmp.(string)
+
 	// validating hostname
 	tmp = installerConfig["hostname"]
 	if tmp == nil {
@@ -392,9 +327,7 @@ func validateConfig(configFile string) serverConfig {
 	if tmp != nil {
 		for _, svc := range tmp.([]interface{}) {
 
-			st := svc.(map[string]interface{})
-
-			config.services = append(config.services, service{name: st["name"].(string), svc: st["service"].(string)})
+			config.services = append(config.services, svc.(string))
 		}
 	}
 
@@ -402,7 +335,7 @@ func validateConfig(configFile string) serverConfig {
 	tmp = installerConfig["packages"]
 	if tmp != nil {
 		for _, pkg := range tmp.([]interface{}) {
-			config.packets = append(config.packets, pkg.(string))
+			config.packages = append(config.packages, pkg.(string))
 
 		}
 	}
@@ -413,13 +346,9 @@ func validateConfig(configFile string) serverConfig {
 type serverConfig struct {
 	hostname      string
 	username      string
+	password      string
 	driveName     string
 	bootPartition string
-	packets       []string
-	services      []service
-}
-
-type service struct {
-	name string
-	svc  string
+	packages      []string
+	services      []string
 }

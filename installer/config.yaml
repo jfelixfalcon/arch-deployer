@@ -1,15 +1,15 @@
 installer:
   driveName: /dev/nvme0n1
   username: admin
+  password: $y$j9T$jOPk2UThDe2fZxuc5jOnV1$CEp3s0fbtRNeVzmMJcoYF8ydCHI7Tzjw/pev//gkwOC
   hostname: cyberneticks-lab
   bootPartition: /dev/nvme0n1p1
   services:
-    - name: networmanager
-      service: NetworkManager
-    - name: openssh
-      service: sshd
-    - name: firewalld
-      service: firewalld
+    - NetworkManager
+    - sshd
+    - firewalld
+    - pcscd
+    - libvirtd
   packages:
     - arch-install-scripts
     - zsh
@@ -29,7 +29,17 @@ installer:
     - sshfs
     - packagekit-qt5
     - opensc
-    - pcsc-tools
     - go
     - base-devel
     - neovim
+    - grub
+    - efibootmgr
+    - qemu-full
+    - virt-manager
+    - virt-viewer
+    - dnsmasq
+    - bridge-utils
+    - libguestfs
+    - ebtables
+    - vde2
+    - openbsd-netcat
