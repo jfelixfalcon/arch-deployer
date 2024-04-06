@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"regexp"
 
+	"github.com/diskfs/go-diskfs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -268,10 +269,10 @@ func validateConfig(configFile string) serverConfig {
 
 	// checking if drive exist
 
-	// _, err = diskfs.Open(tmp.(string))
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
+	_, err = diskfs.Open(tmp.(string))
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	config.driveName = tmp.(string)
 
@@ -315,10 +316,10 @@ func validateConfig(configFile string) serverConfig {
 
 	// checking if partition exist
 
-	// _, err = diskfs.Open(tmp.(string))
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
+	_, err = diskfs.Open(tmp.(string))
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	config.bootPartition = tmp.(string)
 

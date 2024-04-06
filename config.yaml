@@ -1,3 +1,16 @@
+deployer:
+  driveName: /dev/nvme0n1
+  bootPartition: /dev/nvme0n1p1
+  osPartition: /dev/nvme0n1p2
+  hostname: cyberneticks-lab
+  packages:
+    - base
+    - linux
+    - linux-firmware
+    - sudo
+    - vim
+    - python
+    - python-pip"
 installer:
   driveName: /dev/nvme0n1
   username: admin
