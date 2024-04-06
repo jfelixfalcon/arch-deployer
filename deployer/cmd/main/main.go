@@ -13,7 +13,7 @@ import (
 	"regexp"
 
 	"github.com/diskfs/go-diskfs"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed bin/installer
@@ -38,6 +38,7 @@ func cmdExec(args string) error {
 
 	err := cmd.Run()
 	if err != nil {
+		fmt.Println(cmd.Stderr)
 		return err
 	}
 
@@ -117,12 +118,12 @@ func diskSetup(config serverConfig) error {
 		return err
 	}
 
-	err = cmdExec("mkfs.fat -F32 " + config.bootPartition)
+	err = cmdExec("mkfs.btrfs " + config.osPartition + " -f")
 	if err != nil {
 		return err
 	}
 
-	err = cmdExec("mkfs.btrfs " + config.osPartition + " -f")
+	err = cmdExec("mkfs.fat -F32 " + config.bootPartition)
 	if err != nil {
 		return err
 	}
@@ -251,6 +252,7 @@ func validateConfig(configFile string) serverConfig {
 
 	if (yamlConfig["deployer"]) == nil {
 		log.Fatalln("deployer value not found in config file...")
+
 	}
 
 	installerConfig := yamlConfig["deployer"].(map[string]interface{})
@@ -276,24 +278,18 @@ func validateConfig(configFile string) serverConfig {
 
 	// checking if drive exist
 
-	_, err = diskfs.Open(tmp.(string))
+	dsk, err := diskfs.Open(tmp.(string))
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	config.driveName = tmp.(string)
+	dsk.File.Close()
 
 	// validating boot partition
 	tmp = installerConfig["bootPartition"]
 	if tmp == nil {
 		log.Fatalln("Configuration missin required parameter {bootPartition}...")
-	}
-
-	// checking if partition exist
-
-	_, err = diskfs.Open(tmp.(string))
-	if err != nil {
-		log.Fatalln(err)
 	}
 
 	config.bootPartition = tmp.(string)
@@ -302,13 +298,6 @@ func validateConfig(configFile string) serverConfig {
 	tmp = installerConfig["osPartition"]
 	if tmp == nil {
 		log.Fatalln("Configuration missin required parameter {osPartition}...")
-	}
-
-	// checking if partition exist
-
-	_, err = diskfs.Open(tmp.(string))
-	if err != nil {
-		log.Fatalln(err)
 	}
 
 	config.osPartition = tmp.(string)

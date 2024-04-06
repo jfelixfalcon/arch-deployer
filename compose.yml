@@ -3,5 +3,4 @@ services:
     image: golang:1.21
     command: bash -c "while true; do sleep 1000; done"
     volumes:
-      - ./deployer:/app/deployer
-      - ./installer:/app/installer
+      - ./:/app/

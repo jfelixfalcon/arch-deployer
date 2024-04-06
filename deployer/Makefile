@@ -2,7 +2,7 @@ BINARY_NAME=arch_deployer
 .DEFAULT_GOAL := build
 
 build:
-	GOOS=linux GOARCH=amd64 go build -o ../target/${BINARY_NAME} src/main/main.go
+	GOOS=linux GOARCH=amd64 go build -o ../target/${BINARY_NAME} cmd/main/main.go
 
 update:
 	go get -u ./...
@@ -16,4 +16,4 @@ lint:
 
 clean:
 	go clean
-	rm src/main/bin/installer
+	rm cmd/main/bin/installer

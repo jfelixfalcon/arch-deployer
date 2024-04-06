@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"regexp"
 
-	"github.com/diskfs/go-diskfs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -267,13 +266,6 @@ func validateConfig(configFile string) serverConfig {
 		log.Fatalln("Configuration missing required parameter {driveName}")
 	}
 
-	// checking if drive exist
-
-	_, err = diskfs.Open(tmp.(string))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	config.driveName = tmp.(string)
 
 	// validating username
@@ -312,13 +304,6 @@ func validateConfig(configFile string) serverConfig {
 	tmp = installerConfig["bootPartition"]
 	if tmp == nil {
 		log.Fatalln("Configuration missin required parameter {bootPartition}...")
-	}
-
-	// checking if partition exist
-
-	_, err = diskfs.Open(tmp.(string))
-	if err != nil {
-		log.Fatalln(err)
 	}
 
 	config.bootPartition = tmp.(string)

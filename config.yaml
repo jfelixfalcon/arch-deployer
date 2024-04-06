@@ -10,7 +10,7 @@ deployer:
     - sudo
     - vim
     - python
-    - python-pip"
+    - python-pip
 installer:
   driveName: /dev/nvme0n1
   username: admin
@@ -56,3 +56,5 @@ installer:
     - ebtables
     - vde2
     - openbsd-netcat
+    - networkmanager
+    - firewalld
