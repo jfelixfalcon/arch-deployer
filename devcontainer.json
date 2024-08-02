@@ -1,0 +1,10 @@
+{
+  "name": "Go Dev Container",
+  "version": "",
+  "image": "golang:1.22.5",
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "workspaceFolder": "/app"
+}
+

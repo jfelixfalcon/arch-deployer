@@ -2,7 +2,7 @@ deployer:
   driveName: /dev/nvme0n1
   bootPartition: /dev/nvme0n1p1
   osPartition: /dev/nvme0n1p2
-  hostname: cyberneticks-lab
+  hostname: predator-mobile
   packages:
     - base
     - linux
@@ -13,16 +13,16 @@ deployer:
     - python-pip
 installer:
   driveName: /dev/nvme0n1
-  username: admin
+  username: predfalcn
   password: $y$j9T$jOPk2UThDe2fZxuc5jOnV1$CEp3s0fbtRNeVzmMJcoYF8ydCHI7Tzjw/pev//gkwOC
-  hostname: cyberneticks-lab
+  hostname: predator-mobile
   bootPartition: /dev/nvme0n1p1
   services:
     - NetworkManager
     - sshd
     - firewalld
     - pcscd
-    - libvirtd
+    - docker
   packages:
     - arch-install-scripts
     - zsh
@@ -31,7 +31,6 @@ installer:
     - zsh-history-substring-search
     - zsh-autosuggestions
     - zsh-syntax-highlighting
-    - nerd-fonts
     - git
     - npm
     - unzip
@@ -53,8 +52,12 @@ installer:
     - dnsmasq
     - bridge-utils
     - libguestfs
-    - ebtables
     - vde2
     - openbsd-netcat
-    - networkmanager
     - firewalld
+    - firefox
+    - dolphin
+    - spectacle
+    - konsole
+    - sddm
+    - plasma-wayland-protocols
